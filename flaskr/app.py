@@ -183,24 +183,33 @@ def generate_questions(user_results: Dict, regional_results: Dict) -> List[Dict]
     Regional ACT Results: {regional_results}
     USA Median ACT Results: {SAMPLE_USA_RESULTS}
     
-    Generate 5 practice questions focusing on areas needing improvement.
+    Generate 5 ACT-style multiple choice practice questions focusing on areas needing improvement.
     For each question, provide:
     1. The question text
-    2. The correct answer
-    3. A brief explanation
-    4. The category (Reading/Math/Science/English)
-    5. Difficulty level (Easy/Medium/Hard)
+    2. Four multiple choice options (A, B, C, D)
+    3. The correct answer (indicate which letter is correct)
+    4. A brief explanation of why the answer is correct
+    5. The category (Reading/Math/Science/English)
+    6. Difficulty level (Easy/Medium/Hard)
     
     Format each question as JSON with the following structure:
     {{
         "question": "question text",
-        "answer": "correct answer",
+        "options": {{
+            "A": "first option",
+            "B": "second option",
+            "C": "third option",
+            "D": "fourth option"
+        }},
+        "correct_option": "A",
         "explanation": "explanation text",
         "category": "subject category",
         "difficulty": "difficulty level"
     }}
     
-    Return all questions in a JSON array.
+    Return all questions in a JSON array. Make sure distractors (incorrect options) are plausible 
+    but clearly incorrect to a knowledgeable test-taker. Include common misconceptions as distractors.
+    The correct answer should be randomly distributed among A, B, C, and D across questions.
     """
     
     try:
@@ -239,11 +248,14 @@ def generate_questions(user_results: Dict, regional_results: Dict) -> List[Dict]
             
             # Validate the structure of each question
             validated_questions = []
-            required_fields = {"question", "answer", "explanation", "category", "difficulty"}
+            required_fields = {"question", "options", "correct_option", "explanation", "category", "difficulty"}
             
             for q in questions:
                 if all(field in q for field in required_fields):
-                    validated_questions.append(q)
+                    if isinstance(q["options"], dict) and all(opt in q["options"] for opt in ["A", "B", "C", "D"]):
+                        validated_questions.append(q)
+                    else:
+                        logger.warning(f"Invalid options format in question: {q}")
                 else:
                     logger.warning(f"Skipping invalid question format: {q}")
             
@@ -260,8 +272,11 @@ def generate_questions(user_results: Dict, regional_results: Dict) -> List[Dict]
             
     except Exception as e:
         logger.error(f"Error generating questions: {e}")
-        return [{"error": str(e), "question": "Error generating question", "answer": "N/A", 
+        return [{"error": str(e), "question": "Error generating question", 
+                "options": {"A": "N/A", "B": "N/A", "C": "N/A", "D": "N/A"},
+                "correct_option": "A",
                 "explanation": str(e), "category": "Error", "difficulty": "N/A"}]
+
 def parse_unstructured_response(response_text: str) -> List[Dict]:
     """
     Enhanced fallback parser for unstructured text responses
@@ -269,6 +284,7 @@ def parse_unstructured_response(response_text: str) -> List[Dict]:
     logger.debug(f"Parsing unstructured response: {response_text}")
     questions = []
     current_question = {}
+    current_options = {}
     
     lines = response_text.split('\n')
     for line in lines:
@@ -280,38 +296,47 @@ def parse_unstructured_response(response_text: str) -> List[Dict]:
         
         if any(line.lower().startswith(start) for start in ['q:', 'question:', 'problem:']):
             if current_question and current_question.get('question'):
+                current_question['options'] = current_options
                 questions.append(current_question)
             current_question = {
                 "question": line.split(':', 1)[1].strip(),
-                "answer": "",
+                "options": {},
+                "correct_option": "A",
                 "explanation": "",
                 "category": "Unknown",
                 "difficulty": "Medium"
             }
-        elif any(line.lower().startswith(start) for start in ['a:', 'answer:', 'solution:']):
-            if current_question:
-                current_question["answer"] = line.split(':', 1)[1].strip()
-        elif any(line.lower().startswith(start) for start in ['explanation:', 'reason:', 'why:']):
-            if current_question:
-                current_question["explanation"] = line.split(':', 1)[1].strip()
+            current_options = {}
+        elif line.startswith('A)') or line.startswith('A.'):
+            current_options["A"] = line.split(')', 1)[1].strip() if ')' in line else line.split('.', 1)[1].strip()
+        elif line.startswith('B)') or line.startswith('B.'):
+            current_options["B"] = line.split(')', 1)[1].strip() if ')' in line else line.split('.', 1)[1].strip()
+        elif line.startswith('C)') or line.startswith('C.'):
+            current_options["C"] = line.split(')', 1)[1].strip() if ')' in line else line.split('.', 1)[1].strip()
+        elif line.startswith('D)') or line.startswith('D.'):
+            current_options["D"] = line.split(')', 1)[1].strip() if ')' in line else line.split('.', 1)[1].strip()
+        elif line.lower().startswith('correct:') or line.lower().startswith('answer:'):
+            answer_text = line.split(':', 1)[1].strip()
+            if answer_text.upper() in ['A', 'B', 'C', 'D']:
+                current_question["correct_option"] = answer_text.upper()
+        elif line.lower().startswith('explanation:'):
+            current_question["explanation"] = line.split(':', 1)[1].strip()
         elif line.lower().startswith('category:'):
-            if current_question:
-                current_question["category"] = line.split(':', 1)[1].strip()
+            current_question["category"] = line.split(':', 1)[1].strip()
         elif line.lower().startswith('difficulty:'):
-            if current_question:
-                current_question["difficulty"] = line.split(':', 1)[1].strip()
+            current_question["difficulty"] = line.split(':', 1)[1].strip()
     
+    # Add the last question if exists
     if current_question and current_question.get('question'):
+        current_question['options'] = current_options
         questions.append(current_question)
     
     logger.debug(f"Parsed questions: {questions}")
     return questions if questions else [{"question": "Failed to generate questions", 
-                                      "answer": "N/A",
+                                      "options": {"A": "N/A", "B": "N/A", "C": "N/A", "D": "N/A"},
+                                      "correct_option": "A",
                                       "explanation": "The API response format was unexpected", 
-                                      "category": "Error",
-                                      "difficulty": "N/A"}]
-
-# Routes
+                                      "category": "Error", "difficulty": "N/A"}]
 @app.route('/')
 def test_interface():
     """Test interface endpoint"""

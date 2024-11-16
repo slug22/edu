@@ -19,16 +19,26 @@ client = openai.OpenAI(
 
 # Sample test data
 SAMPLE_USER_RESULTS = {
-    "math": 75,
-    "reading": 82,
-    "science": 68
+"English": 20,
+"Mathematics": 11,
+"Reading": 11,
+"Science": 19
 }
 
 SAMPLE_REGIONAL_RESULTS = {
-    "math": 80,
-    "reading": 79,
-    "science": 73
+"English": 15,
+"Mathematics": 15,
+"Reading": 15,
+"Science": 15
 }
+SAMPLE_USA_RESULTS = {
+"English": 21,
+"Mathematics": 21,
+"Reading": 21,
+"Science": 21
+
+}
+
 
 def generate_questions(user_results, regional_results):
     """
@@ -36,8 +46,9 @@ def generate_questions(user_results, regional_results):
     """
     prompt = f"""
     Given the following test results:
-    User Results: {user_results}
-    Regional Results: {regional_results}
+    User ACT Results: {user_results}
+    Regional ACT Results: {regional_results}
+    USA Median ACT Results: {SAMPLE_USA_RESULTS}
     
     Generate 5 relevant practice questions that focus on areas where improvement is needed,
     comparing individual performance against regional averages.
@@ -85,10 +96,16 @@ HTML_TEMPLATE = """
         <h3>Custom Data</h3>
         <form action="/test-custom" method="post">
             <label>User Results (JSON):</label><br>
-            <textarea name="user_results">{"math": 75, "reading": 82, "science": 68}</textarea><br><br>
+            <textarea name="user_results">{"English": 21,
+"Mathematics": 21,
+"Reading": 21,
+"Science": 21}</textarea><br><br>
             
             <label>Regional Results (JSON):</label><br>
-            <textarea name="regional_results">{"math": 80, "reading": 79, "science": 73}</textarea><br><br>
+            <textarea name="regional_results">{"English": 21,
+"Mathematics": 21,
+"Reading": 21,
+"Science": 21}</textarea><br><br>
             
             <button type="submit">Generate Questions</button>
         </form>
@@ -117,6 +134,7 @@ def test_with_sample():
     Test endpoint using sample data
     """
     questions = generate_questions(SAMPLE_USER_RESULTS, SAMPLE_REGIONAL_RESULTS)
+    print(questions)
     return render_template_string(HTML_TEMPLATE, result=questions)
 
 @app.route('/test-custom', methods=['POST'])
@@ -155,7 +173,7 @@ def create_questions():
             'status': 'success',
             'questions': questions
         })
-        
+        print(questions)
     except Exception as e:
         return jsonify({
             'status': 'error',

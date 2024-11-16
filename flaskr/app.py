@@ -184,16 +184,18 @@ def generate_questions(user_results: Dict, regional_results: Dict) -> List[Dict]
     USA Median ACT Results: {SAMPLE_USA_RESULTS}
     
     Generate 5 ACT-style multiple choice practice questions focusing on areas needing improvement.
-    For each question, provide:
-    1. The question text
-    2. Four multiple choice options (A, B, C, D)
-    3. The correct answer (indicate which letter is correct)
-    4. A brief explanation of why the answer is correct
-    5. The category (Reading/Math/Science/English)
-    6. Difficulty level (Easy/Medium/Hard)
+    For each question:
+    1. Include any necessary context (passages, equations, diagrams described in text, etc.) before the question
+    2. Provide the actual question
+    3. Include four multiple choice options (A, B, C, D)
+    4. Indicate the correct answer
+    5. Provide a detailed explanation
+    6. Specify the category (Reading/Math/Science/English)
+    7. Specify the difficulty level (Easy/Medium/Hard)
     
     Format each question as JSON with the following structure:
     {{
+        "context": "Any necessary passage, equation, or background information...",
         "question": "question text",
         "options": {{
             "A": "first option",
@@ -207,6 +209,10 @@ def generate_questions(user_results: Dict, regional_results: Dict) -> List[Dict]
         "difficulty": "difficulty level"
     }}
     
+    For Reading and English questions, ALWAYS include a relevant passage in the context.
+    For Math questions, include any necessary equations or diagrams described in text.
+    For Science questions, include any relevant data, graphs described in text, or experimental setup.
+    
     Return all questions in a JSON array. Make sure distractors (incorrect options) are plausible 
     but clearly incorrect to a knowledgeable test-taker. Include common misconceptions as distractors.
     The correct answer should be randomly distributed among A, B, C, and D across questions.
@@ -219,7 +225,7 @@ def generate_questions(user_results: Dict, regional_results: Dict) -> List[Dict]
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an educational assistant that generates targeted practice questions based on weaknesses and test performance analysis. Return responses in JSON format."
+                    "content": "You are an educational assistant that generates targeted practice questions based on weaknesses and test performance analysis. Return responses in JSON format. Always include necessary context for questions."
                 },
                 {"role": "user", "content": prompt}
             ],
@@ -227,11 +233,8 @@ def generate_questions(user_results: Dict, regional_results: Dict) -> List[Dict]
             max_tokens=2000
         )
         
-        # Extract the actual response content
+        # Extract and clean response content
         response_content = response.choices[0].message.content
-        logger.debug(f"Raw response content: {response_content}")
-        
-        # Clean up the response content - remove markdown code blocks if present
         cleaned_content = response_content
         if "```json" in cleaned_content:
             cleaned_content = cleaned_content.split("```json")[1]
@@ -239,20 +242,20 @@ def generate_questions(user_results: Dict, regional_results: Dict) -> List[Dict]
             cleaned_content = cleaned_content.split("```")[0]
         
         cleaned_content = cleaned_content.strip()
-        logger.debug(f"Cleaned content: {cleaned_content}")
         
-        # Parse the response into structured format
+        # Parse and validate questions
         try:
             questions = json.loads(cleaned_content)
-            logger.debug(f"Parsed JSON questions: {questions}")
-            
-            # Validate the structure of each question
             validated_questions = []
-            required_fields = {"question", "options", "correct_option", "explanation", "category", "difficulty"}
+            required_fields = {"context", "question", "options", "correct_option", "explanation", "category", "difficulty"}
             
             for q in questions:
                 if all(field in q for field in required_fields):
                     if isinstance(q["options"], dict) and all(opt in q["options"] for opt in ["A", "B", "C", "D"]):
+                        # Ensure context is not empty for Reading/English questions
+                        if q["category"] in ["Reading", "English"] and not q["context"].strip():
+                            logger.warning(f"Skipping question with empty context: {q}")
+                            continue
                         validated_questions.append(q)
                     else:
                         logger.warning(f"Invalid options format in question: {q}")
@@ -267,16 +270,18 @@ def generate_questions(user_results: Dict, regional_results: Dict) -> List[Dict]
             
         except json.JSONDecodeError as e:
             logger.warning(f"JSON parsing failed: {e}")
-            logger.info("Attempting unstructured response parsing")
             return parse_unstructured_response(cleaned_content)
             
     except Exception as e:
         logger.error(f"Error generating questions: {e}")
-        return [{"error": str(e), "question": "Error generating question", 
+        return [{"error": str(e), 
+                "context": "Error occurred",
+                "question": "Error generating question", 
                 "options": {"A": "N/A", "B": "N/A", "C": "N/A", "D": "N/A"},
                 "correct_option": "A",
-                "explanation": str(e), "category": "Error", "difficulty": "N/A"}]
-
+                "explanation": str(e), 
+                "category": "Error", 
+                "difficulty": "N/A"}]
 def parse_unstructured_response(response_text: str) -> List[Dict]:
     """
     Enhanced fallback parser for unstructured text responses

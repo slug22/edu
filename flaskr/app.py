@@ -2,9 +2,11 @@ from flask import Flask, request, jsonify, render_template_string
 import os
 import openai
 import json
-import logging
-from typing import Dict, List, Optional
+import logging 
+import requests
+from typing import Dict, List
 from dotenv import load_dotenv
+from files import upload_question()
 
 # Load environment variables
 load_dotenv()

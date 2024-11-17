@@ -175,9 +175,7 @@ HTML_TEMPLATE = """
 """
 
 def get_pinata_questions(jwt_token: str, group_id: str) -> Dict:
-    ##put it here babyboy
-    jwt_token = ""
-    group_id = ""
+    
     """
     Simply fetch all questions from a Pinata group.
     """
@@ -194,6 +192,8 @@ def get_pinata_questions(jwt_token: str, group_id: str) -> Dict:
         return {}
 
 def generate_questions(user_results: Dict, regional_results: Dict) -> List[Dict]:
+    jwt_token = ""
+    group_id = ""
     questions_answered = get_pinata_questions(jwt_token, group_id)
     """
     Generate and parse ACT practice questions based on test results using LLaMA API

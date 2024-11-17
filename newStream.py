@@ -3,16 +3,52 @@ import requests
 import json
 from typing import Dict, List, Optional
 from math import ceil
+from datetime import datetime
+import os
+
+
+from app import generate_questions
 
 # Initialize session state for questions and current page
 if 'questions' not in st.session_state:
-    st.session_state.questions = None
+    st.session_state.questions = []
 
 if 'current_page' not in st.session_state:
-    st.session_state.current_page = 'main'  # Default to main page
+    st.session_state.current_page = 'main'
 
 
-def display_question_card(question: Dict, index: int, container) -> None:
+def save_response_to_json(category: str, difficulty: str, is_correct: bool) -> None:
+    """Save question response data to a JSON file."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    response_data = {
+        "timestamp": timestamp,
+        "subject": category,
+        "difficulty": difficulty,
+        "correct": is_correct
+    }
+
+    # Create 'data' directory if it doesn't exist
+    if not os.path.exists('data'):
+        os.makedirs('data')
+
+    filename = 'data/question_responses.json'
+
+    # Read existing data
+    try:
+        with open(filename, 'r') as f:
+            responses = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        responses = []
+
+    # Append new response
+    responses.append(response_data)
+
+    # Write updated data back to file
+    with open(filename, 'w') as f:
+        json.dump(responses, f, indent=4)
+
+
+def display_question_card(question: Dict, index: int) -> None:
     """Display an individual question card with interactive elements."""
     try:
         # Extract necessary details
@@ -22,48 +58,53 @@ def display_question_card(question: Dict, index: int, container) -> None:
         question_text = question.get('question', '')
         options = question.get('options', {})
 
-        # Start container
-        with container:
-            st.markdown(f"""
-                <div style='
-                    border: 2px solid rgba(255, 255, 255, 0.8);
-                    border-radius: 10px;
-                    padding: 1.5rem;
-                    margin-bottom: 1rem;
-                '>
-                    <h3>Question {index + 1}</h3>
-                    <p><strong>Category:</strong> {category} | 
-                    <strong>Difficulty:</strong> {difficulty}</p>
-            """, unsafe_allow_html=True)
+        # Create a card layout for the question
+        st.markdown(f"""
+            <div style='
+                border: 2px solid rgba(255, 255, 255, 0.8);
+                border-radius: 10px;
+                padding: 1.5rem;
+                margin-bottom: 1rem;
+                background-color: rgba(255, 255, 255, 0.1);
+            '>
+                <h3>Question {index + 1}</h3>
+                <p><strong>Category:</strong> {category} | 
+                <strong>Difficulty:</strong> {difficulty}</p>
+        """, unsafe_allow_html=True)
 
-            # Display context if available
-            if context:
-                st.markdown("**Context:**")
-                st.markdown(f"*{context}*")
+        # Display context if available
+        if context:
+            st.markdown("**Context:**")
+            st.markdown(f"*{context}*")
 
-            # Display question
-            st.write(f"**{question_text}**")
+        # Display question
+        st.write(f"**{question_text}**")
 
-            # Handle options and user selection
-            if isinstance(options, dict) and options:
-                formatted_options = [f"{k}: {v}" for k, v in options.items()]
-                answer_key = f"answer_{index}"
-                choice = st.radio("Select your answer:", formatted_options, key=answer_key)
-                selected_letter = choice[0] if choice else None
+        # Handle options and user selection
+        if isinstance(options, dict) and options:
+            formatted_options = [f"{k}: {v}" for k, v in options.items()]
+            answer_key = f"answer_{index}"
+            choice = st.radio("Select your answer:", formatted_options, key=answer_key)
 
-                # Submit button
-                if st.button("Submit Answer", key=f"submit_{index}"):
-                    correct_answer = question.get('correct_option')
-                    if selected_letter == correct_answer:
-                        st.success("✅ Correct!")
-                    else:
-                        st.error(f"❌ Incorrect. The correct answer is {correct_answer}")
-                    st.info(f"**Explanation:** {question.get('explanation', 'No explanation provided.')}")
-            else:
-                st.error("Invalid question format")
+            # Submit button
+            if st.button("Submit Answer", key=f"submit_{index}"):
+                correct_answer = question.get('correct_option')
+                selected_letter = choice.split(":")[0] if choice else None
+                is_correct = selected_letter == correct_answer
 
-            # Close the div after all content is added
-            st.markdown("</div>", unsafe_allow_html=True)
+                if is_correct:
+                    st.success("✅ Correct!")
+                else:
+                    st.error(f"❌ Incorrect. The correct answer is {correct_answer}")
+                st.info(f"**Explanation:** {question.get('explanation', 'No explanation provided.')}")
+
+                # Save response data to JSON
+                save_response_to_json(category, difficulty, is_correct)
+        else:
+            st.error("Invalid question format")
+
+        # Close the div after all content is added
+        st.markdown("</div>", unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Error displaying question: {str(e)}")
@@ -71,19 +112,7 @@ def display_question_card(question: Dict, index: int, container) -> None:
 
 
 def display_questions_grid(questions: List[Dict]) -> None:
-    """Display questions in a 2-column grid layout"""
-    # Add CSS for better spacing
-    st.markdown("""
-        <style>
-            [data-testid="column"] {
-                padding: 0 1rem;
-            }
-            div.stButton > button {
-                width: 100%;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
+    """Display questions in a responsive grid layout."""
     num_questions = len(questions)
     num_rows = ceil(num_questions / 2)
 
@@ -93,16 +122,16 @@ def display_questions_grid(questions: List[Dict]) -> None:
         first_idx = row * 2
         if first_idx < num_questions:
             with col1:
-                display_question_card(questions[first_idx], first_idx, col1)
+                display_question_card(questions[first_idx], first_idx)
 
         second_idx = row * 2 + 1
         if second_idx < num_questions:
             with col2:
-                display_question_card(questions[second_idx], second_idx, col2)
+                display_question_card(questions[second_idx], second_idx)
 
 
 def generate_questions(personal_data: Dict, regional_data: Dict) -> Optional[List[Dict]]:
-    """Make API call to generate questions"""
+    """Make API call to generate questions."""
     try:
         response = requests.post(
             "http://localhost:5000/generate-questions",
@@ -127,13 +156,6 @@ def generate_questions(personal_data: Dict, regional_data: Dict) -> Optional[Lis
         return None
 
 
-def show_analytics():
-    """Display the analytics page."""
-    st.title("Analytics Dashboard")
-    st.write("This is where you can view analytics related to your practice questions.")
-
-    # Add more analytics-related content here
-
 
 def main():
     """Main application logic."""
@@ -148,6 +170,16 @@ def main():
             .stSuccess, .stError, .stInfo {
                 margin: 1rem 0;
             }
+            .header {
+                text-align: center;
+                color: #4CAF50;
+            }
+            .question-card {
+                background-color: rgba(255, 255, 255, 0.2);
+                border-radius: 10px;
+                padding: 20px;
+                margin-bottom: 20px;
+            }
         </style>
     """, unsafe_allow_html=True)
 
@@ -158,35 +190,35 @@ def main():
         st.title("ACT Practice Question Generator")
 
     with col2:
-        if st.button("View Analytics"):
-            st.session_state.current_page = 'analytics'  # Change current page to analytics
+        # Add navigation button to Analytics page
+        if st.button("📈 Analytics"):
+            st.switch_page("pages/Analytics.py")  # Updated path
 
-    # Page navigation logic
+    # Rest of your main page code remains the same...
     if st.session_state.current_page == 'main':
-        # Create two columns for scores
+        # Create two columns for scores input
         col1, col2 = st.columns(2)
 
         with col1:
             st.header("Regional Scores")
             regional_data = {
-                "Mathematics": st.slider("Math", 0, 36, 18, key="r_math"),
-                "Reading": st.slider("Reading", 0, 36, 18, key="r_reading"),
-                "Science": st.slider("Science", 0, 36, 18, key="r_science"),
-                "English": st.slider("English", 0, 36, 18, key="r_english")
+                "Mathematics": st.slider("Math", 0, 36, 18),
+                "Reading": st.slider("Reading", 0, 36, 18),
+                "Science": st.slider("Science", 0, 36, 18),
+                "English": st.slider("English", 0, 36, 18)
             }
 
         with col2:
             st.header("Your Scores")
             personal_data = {
-                "Mathematics": st.slider("Math", 0, 36, 13, key="p_math"),
-                "Reading": st.slider("Reading", 0, 36, 13, key="p_reading"),
-                "Science": st.slider("Science", 0, 36, 13, key="p_science"),
-                "English": st.slider("English", 0, 36, 13, key="p_english")
+                "Mathematics": st.slider("Math", 0, 36, 13),
+                "Reading": st.slider("Reading", 0, 36, 13),
+                "Science": st.slider("Science", 0, 36, 13),
+                "English": st.slider("English", 0, 36, 13)
             }
 
         # Generate questions button
-        st.markdown("---")
-        if st.button("Generate Questions", type="primary", use_container_width=True):
+        if st.button("Generate Questions", type="primary"):
             with st.spinner("Generating questions..."):
                 questions = generate_questions(personal_data, regional_data)
                 if questions:
@@ -198,18 +230,14 @@ def main():
             st.markdown("## Practice Questions")
             display_questions_grid(st.session_state.questions)
 
-            if st.button("Reset All Answers", use_container_width=True):
-                # Clear answers from session state
-                for key in list(st.session_state.keys()):
-                    if key.startswith("answer_"):
-                        del st.session_state[key]
+            if st.button("Reset All Answers"):
+                with st.spinner("Generating questions..."):
+                    questions = generate_questions(personal_data, regional_data)
+                    if questions:
+                        st.session_state.questions = questions
+                        st.success("Questions generated successfully!")
 
-                del st.session_state.questions
-
-                # Refresh page to reflect changes.
-            st.experimental_rerun()
-
-        # Backend status in sidebar
+    # Backend status in sidebar
     try:
         health_response = requests.get("http://localhost:5000/health")
         if health_response.status_code == 200:

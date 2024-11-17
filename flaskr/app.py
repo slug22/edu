@@ -173,7 +173,28 @@ HTML_TEMPLATE = """
 </body>
 </html>
 """
+
+def get_pinata_questions(jwt_token: str, group_id: str) -> Dict:
+    ##put it here babyboy
+    jwt_token = ""
+    group_id = ""
+    """
+    Simply fetch all questions from a Pinata group.
+    """
+    try:
+        response = requests.get(
+            f"https://api.pinata.cloud/groups/{group_id}/questions",
+            headers={"Authorization": f"Bearer {jwt_token}"}
+        )
+        response.raise_for_status()
+        return response.json()
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch Pinata questions: {e}")
+        return {}
+
 def generate_questions(user_results: Dict, regional_results: Dict) -> List[Dict]:
+    questions_answered = get_pinata_questions(jwt_token, group_id)
     """
     Generate and parse ACT practice questions based on test results using LLaMA API
     """
@@ -182,8 +203,10 @@ def generate_questions(user_results: Dict, regional_results: Dict) -> List[Dict]
     User ACT Results: {user_results}
     Regional ACT Results: {regional_results}
     USA Median ACT Results: {SAMPLE_USA_RESULTS}
+
+    Questions Previously Asnwered: {questions_answered}
     
-    Generate 5 ACT-style multiple choice practice questions focusing on areas needing improvement.
+    Generate 4 ACT-style multiple choice practice questions, one for each subject, focusing on areas needing improvement.
     For each question:
     1. Include any necessary context (passages, equations, diagrams described in text, etc.) before the question
     2. Provide the actual question

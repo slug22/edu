@@ -8,7 +8,8 @@ load_dotenv()
 # Constants
 URL = 'https://api.pinata.cloud'
 BASE_UPLOAD_URL = f'{URL}/pinning/pinJSONToIPFS'
-GROUP_ID = '192cbf02-f8f3-481f-aafa-884994c1f65d'
+GROUP_ID = '2016a6be-fcb5-435d-a799-326313c7daf5'
+
 
 JWT = os.getenv("PINATA_JWT")
 
@@ -20,16 +21,16 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-def upload_question(payload):
-    """
-    Uploads a JSON object to Pinata.
-
-    Args:
-        data (dict): The JSON object to upload.
-
-    Returns:
-        dict: Response data from Pinata.
-    """
+def upload_question(question_data):
+    payload = {
+        "pinataMetadata" : {
+            "name" : "question.json"
+        },
+        "pinataOptions": {
+            "groupId" : f'{GROUP_ID}'
+        },
+        "pinataContent": question_data
+    }
 
     try:
         response = requests.post(BASE_UPLOAD_URL, headers=HEADERS, json=payload, timeout=10)
@@ -39,38 +40,19 @@ def upload_question(payload):
         raise RuntimeError(f"Failed to upload JSON: {e}")
 
 def retrieve_question_set():
-    """
-    Retrieves a set of question JSON
-
-    Args:
-        none
-
-    Returns:
-        list: List of dictionaries that represent the questions in JSON format
-    """
+    pass
 
 # Testing 
 if __name__ == "__main__":
     # Define test JSON sample_data
 
-    # Creating the group
-    print(requests.post(f'{URL}/groups', json={"name": "questions"}, headers=HEADERS).json())
-
     sample_data = {
-        "pinataMetadata" : {
-            "name" : "bruhh.json"
-        },
-        "pinataOptions": {
-            "groupId" : f'{GROUP_ID}'
-        },
-        "pinataContent": {
-            "description": "This is an example JSON object uploaded to Pinata.",
-            "data": {
-                "key1": "value1",
-                "key2": "value2",
-                "nested": {
-                    "key3": "value3"
-                }
+        "description": "This is an example JSON object uploaded to Pinata.",
+        "data": {
+            "key1": "value1",
+            "key2": "value2",
+            "nested": {
+                "key3": "value3"
             }
         }
     }

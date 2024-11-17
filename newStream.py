@@ -17,8 +17,19 @@ if 'current_page' not in st.session_state:
     st.session_state.current_page = 'main'
 
 
-def save_response_to_json(category: str, difficulty: str, is_correct: bool) -> None:
-    """Save question response data to a JSON file."""
+from datetime import datetime
+import json
+import os
+import requests
+
+def save_response_to_json(category: str, difficulty: str, is_correct: bool) -> dict:
+    """
+    Save question response data to a JSON file and upload to Pinata.
+    Returns the Pinata upload response.
+    """
+    # Your JWT token
+    JWT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiI4YmVmMTM1YS03NDY2LTQ1MjQtODhjMy00MGYzNzg2NmViZDciLCJlbWFpbCI6InNpbW9uZ2FnZTBAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBpbl9wb2xpY3kiOnsicmVnaW9ucyI6W3siZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiRlJBMSJ9LHsiZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiTllDMSJ9XSwidmVyc2lvbiI6MX0sIm1mYV9lbmFibGVkIjpmYWxzZSwic3RhdHVzIjoiQUNUSVZFIn0sImF1dGhlbnRpY2F0aW9uVHlwZSI6InNjb3BlZEtleSIsInNjb3BlZEtleUtleSI6ImZhNjUxNWZkOTRkMDMyZGQwN2QzIiwic2NvcGVkS2V5U2VjcmV0IjoiOWUyZTRiOTE4NDVjMDA4OWE3YzM0NDdhZDVhZDJkZTAyMTdkNGM5MjExOTI2ODEyZDZmMWRkMDlmYmU2ODA4NCIsImV4cCI6MTc2MzM1NzkxNH0.zpWQXD9YWbE6BKiBavUtGyZJJkrEiZ4x0j1zxzgpmJs"
+    
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     response_data = {
         "timestamp": timestamp,
@@ -43,9 +54,53 @@ def save_response_to_json(category: str, difficulty: str, is_correct: bool) -> N
     # Append new response
     responses.append(response_data)
 
-    # Write updated data back to file
+    # Write updated data to file
     with open(filename, 'w') as f:
         json.dump(responses, f, indent=4)
+
+    # Prepare to upload to Pinata
+    url = "https://api.pinata.cloud/pinning/pinFileToIPFS"
+    
+    headers = {
+        "Authorization": f"Bearer {JWT_TOKEN}"
+    }
+
+    # Create the file payload
+    files = {
+        'file': ('question_responses.json', open(filename, 'rb'), 'application/json')
+    }
+
+    # Add metadata
+    payload = {
+        'pinataMetadata': {
+            'name': 'question_responses.json',
+            'keyvalues': {
+                'timestamp': timestamp
+            }
+        }
+    }
+
+    try:
+        response = requests.post(
+            url,
+            files=files,
+            headers=headers,
+            data={'pinataMetadata': json.dumps(payload['pinataMetadata'])}
+        )
+        response.raise_for_status()
+        
+        print(f"File uploaded successfully to Pinata. CID: {response.json().get('IpfsHash')}")
+        return response.json()
+        
+    except Exception as e:
+        print(f"Error uploading to Pinata: {e}")
+        return {"error": str(e)}
+    finally:
+        files['file'][1].close()
+
+
+result = save_response_to_json("Math", "Easy", True)
+print(result)
 
 
 def display_question_card(question: Dict, index: int) -> None:

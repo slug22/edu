@@ -6,9 +6,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Constants
-URL = 'https://api.pinata.cloud'
-BASE_UPLOAD_URL = f'{URL}/pinning/pinJSONToIPFS'
-GROUP_ID = '2016a6be-fcb5-435d-a799-326313c7daf5'
+URL = 'https://api.pinata.cloud/v3'
+GROUP_ID = ''
 
 
 JWT = os.getenv("PINATA_JWT")
@@ -16,31 +15,40 @@ JWT = os.getenv("PINATA_JWT")
 if not JWT:
     raise ValueError("Environment variable PINATA_JWT is not set. Please check your .env file.")
 
-HEADERS = {
-    "Authorization": f"Bearer {JWT}",
-    "Content-Type": "application/json"
-}
 
 def upload_question(question_data):
-    payload = {
-        "pinataMetadata" : {
-            "name" : "question.json"
-        },
-        "pinataOptions": {
-            "groupId" : f'{GROUP_ID}'
-        },
-        "pinataContent": question_data
+    HEADERS = {
+        "Authorization": f"Bearer {JWT}",
+        "Content-Type": "multipart/form-data"
     }
 
+    payload = "test"
+
     try:
-        response = requests.post(BASE_UPLOAD_URL, headers=HEADERS, json=payload, timeout=10)
+        response = requests.post(f'{URL}/files', headers=HEADERS, data=payload)
         response.raise_for_status()  # Raise HTTPError for bad responses
         return response.json()
     except requests.exceptions.RequestException as e:
         raise RuntimeError(f"Failed to upload JSON: {e}")
 
-def retrieve_question_set():
-    pass
+# def retrieve_question_set():
+#     HEADERS = {
+#         "Authorization": f"Bearer {JWT}",
+#     }
+#
+#     try:
+#         response = requests.post(f"{URL}/", headers=HEADERS)
+#         print(response.json())
+#         response.raise_for_status()
+#         # questions = []
+#         # for row in response.json()["rows"]:
+#         #     print(row)
+#
+#
+#
+#     except requests.exceptions.RequestException as e:
+#         raise RuntimeError(f"Failed to retrieve question set: {e}")
+
 
 # Testing 
 if __name__ == "__main__":
@@ -50,7 +58,7 @@ if __name__ == "__main__":
         "description": "This is an example JSON object uploaded to Pinata.",
         "data": {
             "key1": "value1",
-            "key2": "value2",
+            "key2": "value2euaoeua",
             "nested": {
                 "key3": "value3"
             }
@@ -59,6 +67,7 @@ if __name__ == "__main__":
 
     try:
         response = upload_question(sample_data)
+        print(retrieve_question_set())
         print("JSON uploaded successfully:")
         print(response)
     except Exception as e:
